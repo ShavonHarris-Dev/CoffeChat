@@ -1,10 +1,10 @@
 import React, { memo, useState, useMemo } from 'react';
 import { Clock, Users, MapPin } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { suggestedMatches } from '../data/sampleData';
 import Navigation from './Navigation';
 import EmptyState from './EmptyState';
 import LoadingSpinner from './LoadingSpinner';
+import { sortByScore } from '../utils/connectionUtils';
 
 // MatchCard component for swiping/matching interface
 const MatchCard = memo(({ match, onLike, onPass }) => (
@@ -27,29 +27,37 @@ const MatchCard = memo(({ match, onLike, onPass }) => (
     
     <div className="grid grid-cols-1 gap-2 mb-4 text-sm">
       <div className="flex items-center justify-center gap-2 text-text-secondary">
-        <MapPin size={14} />
-        <span>{match.location}</span>
-      </div>
-      <div className="flex items-center justify-center gap-2 text-text-secondary">
         <Clock size={14} />
-        <span>{match.availability}</span>
+        <span>Connected {match.dormantPeriod} ago</span>
       </div>
-      <div className="flex items-center justify-center gap-2 text-text-secondary">
-        <Users size={14} />
-        <span>{match.mutualConnections} mutual connections</span>
-      </div>
+      {match.location && (
+        <div className="flex items-center justify-center gap-2 text-text-secondary">
+          <MapPin size={14} />
+          <span>{match.location}</span>
+        </div>
+      )}
+      {match.email && (
+        <div className="flex items-center justify-center gap-2 text-text-secondary">
+          <Users size={14} />
+          <span>Email available</span>
+        </div>
+      )}
     </div>
 
-    <div className="bg-primary/5 p-4 rounded-lg mb-4">
-      <p className="text-sm text-text-primary text-center mb-2">"{match.bio}"</p>
-      <div className="flex flex-wrap gap-1 justify-center">
-        {match.commonInterests?.map((interest, index) => (
-          <span key={index} className="bg-white px-2 py-1 rounded-full text-xs text-text-secondary border">
-            {interest}
-          </span>
-        ))}
+    {(match.bio || match.commonInterests?.length > 0) && (
+      <div className="bg-primary/5 p-4 rounded-lg mb-4">
+        {match.bio && <p className="text-sm text-text-primary text-center mb-2">"{match.bio}"</p>}
+        {match.commonInterests?.length > 0 && (
+          <div className="flex flex-wrap gap-1 justify-center">
+            {match.commonInterests.map((interest, index) => (
+              <span key={index} className="bg-white px-2 py-1 rounded-full text-xs text-text-secondary border">
+                {interest}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
-    </div>
+    )}
 
     <div className="flex gap-4 justify-center">
       <button 
@@ -75,28 +83,22 @@ const MatchCard = memo(({ match, onLike, onPass }) => (
 ));
 
 const DiscoveryView = () => {
-  const { navigateTo, isLoading, addToast } = useApp();
+  const { navigateTo, isLoading, addToast, connections, hasUploadedData, updateConnectionStatus } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     dormantPeriod: '',
-    location: '',
     minRelationshipScore: 0
   });
+
+  // Use uploaded connections, sorted by score
+  const availableConnections = hasUploadedData ? sortByScore(connections) : [];
   
   const handleLikeMatch = (match) => {
-    addToast(`You liked ${match.name}!`, 'success');
-    // Simulate matching logic - in real app, this would be an API call
-    const isMatch = Math.random() > 0.6; // 40% chance of instant match
-    
-    if (isMatch) {
-      setTimeout(() => {
-        navigateTo('confirmation', match);
-      }, 1000);
-    } else {
-      addToast(`We'll let you know if ${match.name} likes you back!`, 'info');
-    }
-    
-    console.log('Liked match:', match.id);
+    // Add to CRM queue
+    updateConnectionStatus(match.id, 'queue');
+    addToast(`Added ${match.name} to pipeline!`, 'success');
+    // Navigate to outreach view with connection details
+    navigateTo('confirmation', match);
   };
 
   const handlePassMatch = (match) => {
@@ -106,21 +108,20 @@ const DiscoveryView = () => {
 
   // Filter and search logic
   const filteredMatches = useMemo(() => {
-    return suggestedMatches.filter(match => {
+    return availableConnections.filter(match => {
       const matchesSearch = match.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           match.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          match.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          match.commonInterests?.some(interest => 
+                          (match.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          match.commonInterests?.some(interest =>
                             interest.toLowerCase().includes(searchTerm.toLowerCase())
                           );
-      
+
       const matchesDormantPeriod = !filters.dormantPeriod || match.dormantPeriod === filters.dormantPeriod;
-      const matchesLocation = !filters.location || match.location.includes(filters.location);
       const matchesScore = match.relationshipScore >= filters.minRelationshipScore;
-      
-      return matchesSearch && matchesDormantPeriod && matchesLocation && matchesScore;
+
+      return matchesSearch && matchesDormantPeriod && matchesScore;
     });
-  }, [searchTerm, filters]);
+  }, [availableConnections, searchTerm, filters]);
 
   if (isLoading) {
     return (
@@ -149,15 +150,15 @@ const DiscoveryView = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name, title, or location..."
+              placeholder="Search by name, title, or company..."
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             />
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label htmlFor="dormantPeriod" className="block text-sm font-medium text-text-primary mb-2">
-                Dormant Period
+                Connection Age
               </label>
               <select
                 id="dormantPeriod"
@@ -165,31 +166,17 @@ const DiscoveryView = () => {
                 onChange={(e) => setFilters(prev => ({ ...prev, dormantPeriod: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               >
-                <option value="">All periods</option>
+                <option value="">All ages</option>
                 <option value="6 months">6 months</option>
                 <option value="1 year">1 year</option>
                 <option value="2 years">2 years</option>
                 <option value="3+ years">3+ years</option>
               </select>
             </div>
-            
-            <div>
-              <label htmlFor="location" className="block text-sm font-medium text-text-primary mb-2">
-                Location
-              </label>
-              <input
-                id="location"
-                type="text"
-                value={filters.location}
-                onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
-                placeholder="Filter by location..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
-            </div>
-            
+
             <div>
               <label htmlFor="minScore" className="block text-sm font-medium text-text-primary mb-2">
-                Min Relationship Score: {filters.minRelationshipScore}%
+                Min Reconnection Score: {filters.minRelationshipScore}%
               </label>
               <input
                 id="minScore"
@@ -211,7 +198,15 @@ const DiscoveryView = () => {
           <p className="text-text-secondary">Swipe through professionals who share your interests and background</p>
         </div>
 
-        {filteredMatches.length === 0 ? (
+        {!hasUploadedData ? (
+          <EmptyState
+            title="No connections uploaded"
+            description="Upload your LinkedIn connections CSV to start finding people to reconnect with."
+            icon="upload"
+            actionLabel="Upload Connections"
+            onAction={() => navigateTo('upload')}
+          />
+        ) : filteredMatches.length === 0 ? (
           <EmptyState
             title="No matches found"
             description="Try adjusting your search criteria or filters to find more potential coffee partners."
@@ -219,7 +214,7 @@ const DiscoveryView = () => {
             actionLabel="Clear Filters"
             onAction={() => {
               setSearchTerm('');
-              setFilters({ dormantPeriod: '', location: '', minRelationshipScore: 0 });
+              setFilters({ dormantPeriod: '', minRelationshipScore: 0 });
             }}
           />
         ) : (

@@ -5,9 +5,11 @@ import Toast from './components/Toast';
 
 // Use React.lazy for code-splitting
 const Dashboard = lazy(() => import('./components/Dashboard'));
+const PipelineView = lazy(() => import('./components/PipelineView'));
 const DiscoveryView = lazy(() => import('./components/DiscoveryView'));
 const MatchConfirmationView = lazy(() => import('./components/MatchConfirmationView'));
 const SchedulingView = lazy(() => import('./components/SchedulingView'));
+const CSVUploadView = lazy(() => import('./components/CSVUploadView'));
 
 // Loading component shown during lazy loading
 const LoadingFallback = () => (
@@ -17,13 +19,17 @@ const LoadingFallback = () => (
 );
 
 const AppContent = () => {
-  const { currentView, toasts, removeToast } = useApp();
-  
+  const { currentView, toasts, removeToast, handleConnectionsUpload } = useApp();
+
   // Render the appropriate view based on currentView state
   const renderView = () => {
     switch (currentView) {
+      case 'upload':
+        return <CSVUploadView onUploadComplete={handleConnectionsUpload} />;
       case 'dashboard':
         return <Dashboard />;
+      case 'pipeline':
+        return <PipelineView />;
       case 'discovery':
         return <DiscoveryView />;
       case 'confirmation':
@@ -31,7 +37,7 @@ const AppContent = () => {
       case 'schedule':
         return <SchedulingView />;
       default:
-        return <Dashboard />;
+        return <CSVUploadView onUploadComplete={handleConnectionsUpload} />;
     }
   };
   

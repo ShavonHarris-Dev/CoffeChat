@@ -1,120 +1,139 @@
-import React, { memo, useEffect, useState } from 'react';
+import React, { memo, useState } from 'react';
+import { Copy, ExternalLink, Coffee } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import Navigation from './Navigation';
-import LoadingSpinner from './LoadingSpinner';
 
 const MatchConfirmationView = () => {
-  const { selectedMatch, navigateTo, addToast } = useApp();
-  const [isMatching, setIsMatching] = useState(true);
+  const { selectedMatch, navigateTo, addToast, updateConnectionStatus } = useApp();
+  const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    // Simulate matching process
-    const timer = setTimeout(() => {
-      setIsMatching(false);
-      addToast('It\'s a match! You can now schedule a coffee chat.', 'success');
-    }, 2000);
+  // Generate personalized message
+  const generateMessage = () => {
+    if (!selectedMatch) return '';
 
-    return () => clearTimeout(timer);
-  }, [addToast]);
+    const firstName = selectedMatch.name.split(' ')[0];
+    const timeSinceConnection = selectedMatch.dormantPeriod;
 
-  if (isMatching) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Navigation />
-        <div className="flex flex-col items-center justify-center h-96">
-          <div className="text-center">
-            <LoadingSpinner size="large" />
-            <h2 className="text-2xl font-bold text-text-primary mt-6 mb-2">
-              Finding your match...
-            </h2>
-            <p className="text-text-secondary">
-              We're checking if {selectedMatch?.name} is interested too!
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+    return `Hi ${firstName},
+
+I hope this message finds you well! I was going through my LinkedIn connections and came across your profile. I noticed we connected ${timeSinceConnection} ago${selectedMatch.company ? ` and saw you're now at ${selectedMatch.company}` : ''}.
+
+I'd love to catch up over coffee sometime if you're open to it. It would be great to hear what you've been working on and share what I've been up to as well.
+
+Let me know if you'd be interested - I'm happy to work around your schedule!
+
+Best regards`;
+  };
+
+  const message = generateMessage();
+
+  const handleCopyMessage = () => {
+    navigator.clipboard.writeText(message);
+    setCopied(true);
+
+    // Mark as reached out in CRM
+    if (selectedMatch?.id) {
+      updateConnectionStatus(selectedMatch.id, 'reached_out', 'reachedOut');
+    }
+
+    addToast('Message copied! Connection marked as reached out.', 'success');
+    setTimeout(() => setCopied(false), 3000);
+  };
+
+  const handleOpenLinkedIn = () => {
+    if (selectedMatch?.url) {
+      window.open(selectedMatch.url, '_blank', 'noopener,noreferrer');
+    } else {
+      addToast('LinkedIn profile URL not available', 'error');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
       <div className="max-w-2xl mx-auto p-4">
-        <div className="bg-surface rounded-2xl shadow-lg p-8 text-center">
-          {/* Success Animation */}
-          <div className="w-24 h-24 mx-auto mb-6 bg-success/10 rounded-full flex items-center justify-center">
-            <svg className="w-12 h-12 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-            </svg>
+        <div className="bg-surface rounded-2xl shadow-lg p-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
+              <Coffee className="w-10 h-10 text-primary" />
+            </div>
+            <h1 className="text-3xl font-bold text-text-primary mb-2">
+              Ready to Reconnect!
+            </h1>
+            <p className="text-text-secondary">
+              Here's everything you need to reach out to {selectedMatch?.name}
+            </p>
           </div>
 
-          <h1 className="text-3xl font-bold text-text-primary mb-2">
-            It's a Match! 🎉
-          </h1>
-          
-          <p className="text-text-secondary mb-8">
-            Both you and {selectedMatch?.name} are interested in connecting for a coffee chat.
-          </p>
-
+          {/* Connection Details */}
           {selectedMatch && (
-            <div className="flex items-center gap-4 mb-8 p-6 bg-primary/5 rounded-lg">
-              <img 
-                src={selectedMatch.avatar} 
+            <div className="flex items-center gap-4 mb-6 p-4 bg-primary/5 rounded-lg">
+              <img
+                src={selectedMatch.avatar}
                 alt={selectedMatch.name}
                 className="w-16 h-16 rounded-full"
               />
-              <div className="text-left">
+              <div className="flex-1">
                 <h3 className="font-semibold text-text-primary text-lg">{selectedMatch.name}</h3>
-                <p className="text-text-secondary">{selectedMatch.title}</p>
-                <div className="flex items-center gap-4 mt-2 text-sm text-text-secondary">
-                  <span>📍 {selectedMatch.location}</span>
-                  <span>⏰ {selectedMatch.availability}</span>
-                  <span>☕ {selectedMatch.preferredMeetingStyle}</span>
-                </div>
+                <p className="text-text-secondary text-sm">{selectedMatch.title}</p>
+                <p className="text-text-secondary text-xs mt-1">
+                  Connected {selectedMatch.dormantPeriod} ago • {selectedMatch.relationshipScore}% match
+                </p>
               </div>
             </div>
           )}
 
-          <div className="bg-linkedin-blue/5 p-6 rounded-lg mb-8">
-            <h4 className="font-semibold text-text-primary mb-3">What happens next?</h4>
-            <div className="space-y-3 text-sm text-text-secondary text-left">
-              <div className="flex items-start gap-3">
-                <span className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                <p>You'll both receive an email with each other's contact information</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                <p>Use our scheduling tool or reach out directly to coordinate</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
-                <p>Meet up and enjoy your coffee chat!</p>
-              </div>
+          {/* Message Template */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold text-text-primary">Message Template</h4>
+              <span className="text-xs text-text-secondary">Feel free to personalize this!</span>
+            </div>
+            <div className="relative">
+              <textarea
+                value={message}
+                readOnly
+                className="w-full h-64 p-4 border border-gray-300 rounded-lg bg-gray-50 text-text-primary text-sm resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4">
+          {/* Action Buttons */}
+          <div className="space-y-3">
             <button
-              onClick={() => navigateTo('schedule', selectedMatch)}
-              className="flex-1 bg-primary text-white py-3 px-6 rounded-lg font-medium hover:bg-linkedin-blue-dark transition-colors"
+              onClick={handleCopyMessage}
+              className="w-full bg-primary text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
             >
-              Schedule Coffee Chat
+              <Copy size={20} />
+              {copied ? 'Copied!' : 'Copy Message'}
             </button>
+
+            <button
+              onClick={handleOpenLinkedIn}
+              className="w-full bg-linkedin-blue text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-800 transition-colors flex items-center justify-center gap-2"
+            >
+              <ExternalLink size={20} />
+              Open LinkedIn Profile
+            </button>
+
             <button
               onClick={() => navigateTo('discovery')}
-              className="flex-1 bg-background text-text-secondary py-3 px-6 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+              className="w-full bg-background text-text-secondary py-3 px-6 rounded-lg font-medium hover:bg-gray-200 transition-colors border border-gray-300"
             >
-              Find More Matches
+              Back to Discovery
             </button>
           </div>
 
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => navigateTo('dashboard')}
-              className="text-primary hover:text-linkedin-blue-dark transition-colors"
-            >
-              ← Back to Dashboard
-            </button>
+          {/* Instructions */}
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+            <h5 className="font-semibold text-text-primary text-sm mb-2">Next Steps:</h5>
+            <ol className="text-sm text-text-secondary space-y-1 list-decimal list-inside">
+              <li>Copy the message above (or customize it)</li>
+              <li>Click "Open LinkedIn Profile" to go to their profile</li>
+              <li>Send them a message on LinkedIn</li>
+              <li>Wait for their response and coordinate a time to meet!</li>
+            </ol>
           </div>
         </div>
       </div>

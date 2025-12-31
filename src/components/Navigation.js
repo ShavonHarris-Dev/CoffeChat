@@ -10,6 +10,8 @@ const Navigation = () => {
     switch (view) {
       case 'dashboard':
         return 'Dashboard';
+      case 'pipeline':
+        return 'Pipeline';
       case 'discovery':
         return 'Discover Connections';
       case 'compose':
@@ -87,6 +89,16 @@ const Navigation = () => {
               }`}
             >
               Dashboard
+            </button>
+            <button
+              onClick={() => navigateTo('pipeline')}
+              className={`px-3 py-2 rounded-lg transition-colors ${
+                currentView === 'pipeline'
+                  ? 'bg-primary text-white'
+                  : 'text-text-secondary hover:text-primary hover:bg-background'
+              }`}
+            >
+              Pipeline
             </button>
             <button
               onClick={() => navigateTo('discovery')}
